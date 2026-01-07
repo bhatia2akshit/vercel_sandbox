@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { Sandbox } from '@vercel/sandbox'
+import { readCommandMeta } from '@/ai/sandbox/command-store'
 
 interface Params {
   sandboxId: string
@@ -11,18 +11,11 @@ export async function GET(
   { params }: { params: Promise<Params> }
 ) {
   const cmdParams = await params
-  const sandbox = await Sandbox.get(cmdParams)
-  const command = await sandbox.getCommand(cmdParams.cmdId)
-
-  /**
-   * The wait can get to fail when the Sandbox is stopped but the command
-   * was still running. In such case we return empty for finish data.
-   */
-  const done = await command.wait().catch(() => null)
+  const meta = await readCommandMeta(cmdParams)
   return NextResponse.json({
-    sandboxId: sandbox.sandboxId,
-    cmdId: command.cmdId,
-    startedAt: command.startedAt,
-    exitCode: done?.exitCode,
+    sandboxId: cmdParams.sandboxId,
+    cmdId: cmdParams.cmdId,
+    startedAt: meta?.startedAt ?? Date.now(),
+    exitCode: meta?.exitCode,
   })
 }

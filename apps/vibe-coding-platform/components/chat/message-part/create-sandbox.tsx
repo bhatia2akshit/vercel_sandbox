@@ -13,7 +13,7 @@ export function CreateSandbox({ message }: Props) {
     <ToolMessage>
       <ToolHeader>
         <BoxIcon className="w-3.5 h-3.5" />
-        Create Sandbox
+        Create E2B Sandbox
       </ToolHeader>
       <div className="relative pl-6 min-h-5">
         <Spinner
@@ -27,9 +27,9 @@ export function CreateSandbox({ message }: Props) {
           )}
         </Spinner>
         <span>
-          {message.status === 'done' && 'Sandbox created successfully'}
-          {message.status === 'loading' && 'Creating Sandbox'}
-          {message.status === 'error' && 'Failed to create sandbox'}
+          {message.status === 'done' && 'E2B sandbox created successfully'}
+          {message.status === 'loading' && 'Creating E2B sandbox'}
+          {message.status === 'error' && 'Failed to create E2B sandbox'}
         </span>
       </div>
     </ToolMessage>

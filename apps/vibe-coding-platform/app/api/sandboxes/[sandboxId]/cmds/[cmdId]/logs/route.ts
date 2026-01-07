@@ -1,5 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { Sandbox } from '@vercel/sandbox'
+import {
+  readCommandLogsNdjson,
+  readCommandMeta,
+} from '@/ai/sandbox/command-store'
 
 interface Params {
   sandboxId: string
@@ -12,22 +15,25 @@ export async function GET(
 ) {
   const logParams = await params
   const encoder = new TextEncoder()
-  const sandbox = await Sandbox.get(logParams)
-  const command = await sandbox.getCommand(logParams.cmdId)
 
   return new NextResponse(
     new ReadableStream({
       async pull(controller) {
-        for await (const logline of command.logs()) {
-          controller.enqueue(
-            encoder.encode(
-              JSON.stringify({
-                data: logline.data,
-                stream: logline.stream,
-                timestamp: Date.now(),
-              }) + '\n'
-            )
-          )
+        let cursor = 0
+        while (true) {
+          const meta = await readCommandMeta(logParams)
+          const logs = await readCommandLogsNdjson(logParams)
+
+          if (logs && logs.length > cursor) {
+            controller.enqueue(encoder.encode(logs.slice(cursor)))
+            cursor = logs.length
+          }
+
+          if (typeof meta?.exitCode === 'number') {
+            break
+          }
+
+          await new Promise((r) => setTimeout(r, 500))
         }
         controller.close()
       },

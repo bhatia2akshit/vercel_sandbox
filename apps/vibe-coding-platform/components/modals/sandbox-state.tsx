@@ -19,15 +19,15 @@ export function SandboxState() {
       <Dialog open>
         <DialogHeader className="sr-only">
           <DialogTitle className="sr-only">
-            Sandbox max. duration reached
+            E2B sandbox max. duration reached
           </DialogTitle>
           <DialogDescription className="sr-only">
-            The Vercel Sandbox is already stopped. You can start a new session
-            by clicking the button below.
+            The sandbox is already stopped. You can start a new session by
+            clicking the button below.
           </DialogDescription>
         </DialogHeader>
         <DialogContent>
-          Sandbox max. duration for this demo has been reached
+          E2B sandbox max. duration for this demo has been reached
           <Button onClick={() => window.location.reload()}>
             Start a new session
           </Button>

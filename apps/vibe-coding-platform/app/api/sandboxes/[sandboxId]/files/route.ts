@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { Sandbox } from '@vercel/sandbox'
 import z from 'zod/v3'
+import { connectE2BSandbox, e2bReadFile } from '@/ai/sandbox/e2b'
 
 const FileParamsSchema = z.object({
   sandboxId: z.string(),
@@ -24,23 +24,18 @@ export async function GET(
     )
   }
 
-  const sandbox = await Sandbox.get(fileParams.data)
-  const stream = await sandbox.readFile(fileParams.data)
-  if (!stream) {
+  const sandbox = await connectE2BSandbox(fileParams.data.sandboxId)
+  const data = await e2bReadFile({ sandbox, path: fileParams.data.path })
+  if (!data) {
     return NextResponse.json(
-      { error: 'File not found in the Sandbox' },
+      { error: 'File not found in the E2B sandbox' },
       { status: 404 }
     )
   }
 
-  return new NextResponse(
-    new ReadableStream({
-      async pull(controller) {
-        for await (const chunk of stream) {
-          controller.enqueue(chunk)
-        }
-        controller.close()
-      },
-    })
-  )
+  const body =
+    data.buffer instanceof ArrayBuffer
+      ? data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
+      : Uint8Array.from(data).buffer
+  return new NextResponse(body)
 }

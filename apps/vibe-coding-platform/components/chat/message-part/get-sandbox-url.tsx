@@ -13,7 +13,7 @@ export function GetSandboxURL({
     <ToolMessage>
       <ToolHeader>
         <LinkIcon className="w-3.5 h-3.5" />
-        <span>Get Sandbox URL</span>
+        <span>Get E2B Sandbox URL</span>
       </ToolHeader>
       <div className="relative pl-6 min-h-5">
         <Spinner
@@ -27,7 +27,7 @@ export function GetSandboxURL({
             {message.url}
           </a>
         ) : (
-          <span>Getting Sandbox URL</span>
+          <span>Getting E2B sandbox URL</span>
         )}
       </div>
     </ToolMessage>
