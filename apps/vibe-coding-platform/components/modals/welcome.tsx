@@ -56,9 +56,9 @@ export function Welcome(props: {
               full stack application.
             </p>
             <p className="text-base text-secondary-foreground">
-              It uses Vercel&apos;s AI Cloud services like{' '}
-              <ExternalLink href="https://vercel.com/docs/vercel-sandbox">
-                Sandbox
+              It uses an{' '}
+              <ExternalLink href="https://e2b.dev/docs">
+                E2B Sandbox
               </ExternalLink>{' '}
               for secure code execution,{' '}
               <ExternalLink href="https://vercel.com/docs/ai-gateway">

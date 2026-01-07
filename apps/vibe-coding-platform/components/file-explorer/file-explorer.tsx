@@ -78,7 +78,7 @@ export const FileExplorer = memo(function FileExplorer({
       <PanelHeader>
         <FileIcon className="w-4 mr-2" />
         <span className="font-mono uppercase font-semibold">
-          Sandbox Remote Filesystem
+          E2B Sandbox Remote Filesystem
         </span>
         {selected && !disabled && (
           <span className="ml-auto text-gray-500">{selected.path}</span>

@@ -1,5 +1,3 @@
-import { APIError } from '@vercel/sandbox/dist/api-client/api-error'
-
 interface Params {
   args?: Record<string, unknown>
   action: string
@@ -28,16 +26,24 @@ function getErrorFields(error: unknown) {
       message: String(error),
       json: error,
     }
-  } else if (error instanceof APIError) {
-    return {
-      message: error.message,
-      json: error.json,
-      text: error.text,
-    }
   } else {
+    const anyError = error as any
+    const json =
+      anyError?.json ??
+      anyError?.response?.data ??
+      anyError?.body ??
+      anyError?.cause ??
+      undefined
+    const text =
+      typeof anyError?.text === 'string'
+        ? anyError.text
+        : typeof anyError?.response?.text === 'string'
+        ? anyError.response.text
+        : undefined
     return {
       message: error.message,
-      json: error,
+      json,
+      text,
     }
   }
 }
