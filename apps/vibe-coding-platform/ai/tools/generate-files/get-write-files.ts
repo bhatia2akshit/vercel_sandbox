@@ -1,6 +1,6 @@
 import type { DataPart } from '../../messages/data-parts'
 import type { File } from './get-contents'
-import type { Sandbox } from '@vercel/sandbox'
+import type { Sandbox } from 'e2b'
 import type { UIMessageStreamWriter, UIMessage } from 'ai'
 import { getRichError } from '../get-rich-error'
 
@@ -24,11 +24,18 @@ export function getWriteFiles({ sandbox, toolCallId, writer }: Params) {
     })
 
     try {
-      await sandbox.writeFiles(
-        params.files.map((file) => ({
-          content: Buffer.from(file.content, 'utf8'),
-          path: file.path,
-        }))
+      const dirs = Array.from(
+        new Set(
+          params.files
+            .map((file) => file.path.split('/').slice(0, -1).join('/'))
+            .filter((dir) => dir.length > 0)
+        )
+      )
+      if (dirs.length) {
+        await Promise.all(dirs.map((dir) => sandbox.files.makeDir(dir)))
+      }
+      await Promise.all(
+        params.files.map((file) => sandbox.files.write(file.path, file.content))
       )
     } catch (error) {
       const richError = getRichError({

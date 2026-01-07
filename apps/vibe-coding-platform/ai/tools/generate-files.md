@@ -1,4 +1,4 @@
-Use this tool to generate and upload code files into an existing Vercel Sandbox. It leverages an LLM to create file contents based on the current conversation context and user intent, then writes them directly into the sandbox file system.
+Use this tool to generate and upload code files into an existing E2B sandbox. It leverages an LLM to create file contents based on the current conversation context and user intent, then writes them directly into the sandbox file system.
 
 The generated files should be considered correct on first iteration and suitable for immediate use in the sandbox environment. This tool is essential for scaffolding applications, adding new features, writing configuration files, or fixing missing components.
 
@@ -60,4 +60,4 @@ After generation, the tool will return a list of the files created, including th
 
 ## Summary
 
-Use Generate Files to programmatically create or update files in your Vercel Sandbox. It enables fast iteration, contextual coding, and dynamic file management — all driven by user intent and conversation context.
+Use Generate Files to programmatically create or update files in your sandbox. It enables fast iteration, contextual coding, and dynamic file management — all driven by user intent and conversation context.

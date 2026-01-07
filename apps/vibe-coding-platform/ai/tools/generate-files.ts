@@ -1,12 +1,12 @@
 import type { UIMessageStreamWriter, UIMessage } from 'ai'
 import type { DataPart } from '../messages/data-parts'
-import { Sandbox } from '@vercel/sandbox'
 import { getContents, type File } from './generate-files/get-contents'
 import { getRichError } from './get-rich-error'
 import { getWriteFiles } from './generate-files/get-write-files'
 import { tool } from 'ai'
 import description from './generate-files.md'
 import z from 'zod/v3'
+import { connectE2BSandbox } from '../sandbox/e2b'
 
 interface Params {
   modelId: string
@@ -27,13 +27,13 @@ export const generateFiles = ({ writer, modelId }: Params) =>
         data: { paths: [], status: 'generating' },
       })
 
-      let sandbox: Sandbox | null = null
+      let sandbox: Awaited<ReturnType<typeof connectE2BSandbox>> | null = null
 
       try {
-        sandbox = await Sandbox.get({ sandboxId })
+        sandbox = await connectE2BSandbox(sandboxId)
       } catch (error) {
         const richError = getRichError({
-          action: 'get sandbox by id',
+          action: 'connect to sandbox',
           args: { sandboxId },
           error,
         })

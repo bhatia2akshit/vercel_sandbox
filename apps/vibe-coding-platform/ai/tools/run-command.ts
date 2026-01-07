@@ -1,14 +1,22 @@
 import type { UIMessageStreamWriter, UIMessage } from 'ai'
 import type { DataPart } from '../messages/data-parts'
-import { Command, Sandbox } from '@vercel/sandbox'
 import { getRichError } from './get-rich-error'
 import { tool } from 'ai'
 import description from './run-command.md'
 import z from 'zod/v3'
+import { tasks } from '@trigger.dev/sdk/v3'
+import { connectE2BSandbox, e2bRunCommand } from '../sandbox/e2b'
+import {
+  finalizeCommandArtifacts,
+  initCommandArtifacts,
+} from '../sandbox/command-store'
+import { newCommandId } from '../sandbox/ids'
 
 interface Params {
   writer: UIMessageStreamWriter<UIMessage<never, DataPart>>
 }
+
+const TRIGGER_LOG_PREFIX = '[trigger]'
 
 export const runCommand = ({ writer }: Params) =>
   tool({
@@ -16,7 +24,7 @@ export const runCommand = ({ writer }: Params) =>
     inputSchema: z.object({
       sandboxId: z
         .string()
-        .describe('The ID of the Vercel Sandbox to run the command in'),
+        .describe('The ID of the E2B sandbox to run the command in'),
       command: z
         .string()
         .describe(
@@ -42,50 +50,19 @@ export const runCommand = ({ writer }: Params) =>
       { sandboxId, command, sudo, wait, args = [] },
       { toolCallId }
     ) => {
+      const cmdId = newCommandId()
+
       writer.write({
         id: toolCallId,
         type: 'data-run-command',
         data: { sandboxId, command, args, status: 'executing' },
       })
 
-      let sandbox: Sandbox | null = null
-
       try {
-        sandbox = await Sandbox.get({ sandboxId })
+        await connectE2BSandbox(sandboxId)
       } catch (error) {
         const richError = getRichError({
-          action: 'get sandbox by id',
-          args: { sandboxId },
-          error,
-        })
-
-        writer.write({
-          id: toolCallId,
-          type: 'data-run-command',
-          data: {
-            sandboxId,
-            command,
-            args,
-            error: richError.error,
-            status: 'error',
-          },
-        })
-
-        return richError.message
-      }
-
-      let cmd: Command | null = null
-
-      try {
-        cmd = await sandbox.runCommand({
-          detached: true,
-          cmd: command,
-          args,
-          sudo,
-        })
-      } catch (error) {
-        const richError = getRichError({
-          action: 'run command in sandbox',
+          action: 'connect to sandbox',
           args: { sandboxId },
           error,
         })
@@ -110,7 +87,7 @@ export const runCommand = ({ writer }: Params) =>
         type: 'data-run-command',
         data: {
           sandboxId,
-          commandId: cmd.cmdId,
+          commandId: cmdId,
           command,
           args,
           status: 'executing',
@@ -118,23 +95,68 @@ export const runCommand = ({ writer }: Params) =>
       })
 
       if (!wait) {
-        writer.write({
-          id: toolCallId,
-          type: 'data-run-command',
-          data: {
+        try {
+          console.log(`${TRIGGER_LOG_PREFIX} queueing background command`, {
             sandboxId,
-            commandId: cmd.cmdId,
+            cmdId,
+            command,
+          })
+          const handle = await tasks.trigger('e2b-run-command', {
+            sandboxId,
+            cmdId,
             command,
             args,
-            status: 'running',
-          },
-        })
+            sudo,
+          })
+          console.log(`${TRIGGER_LOG_PREFIX} background command queued`, {
+            sandboxId,
+            cmdId,
+            triggerRunId: handle.id,
+          })
 
-        return `The command \`${command} ${args.join(
-          ' '
-        )}\` has been started in the background in the sandbox with ID \`${sandboxId}\` with the commandId ${
-          cmd.cmdId
-        }.`
+          await initCommandArtifacts({
+            sandboxId,
+            cmdId,
+            triggerRunId: handle.id,
+          })
+
+          writer.write({
+            id: toolCallId,
+            type: 'data-run-command',
+            data: {
+              sandboxId,
+              commandId: cmdId,
+              command,
+              args,
+              status: 'running',
+            },
+          })
+
+          return `The command \`${command} ${args.join(
+            ' '
+          )}\` has been queued to run in the background in sandbox \`${sandboxId}\` with commandId \`${cmdId}\`.`
+        } catch (error) {
+          const richError = getRichError({
+            action: 'trigger background command',
+            args: { sandboxId, cmdId },
+            error,
+          })
+
+          writer.write({
+            id: toolCallId,
+            type: 'data-run-command',
+            data: {
+              sandboxId,
+              commandId: cmdId,
+              command,
+              args,
+              error: richError.error,
+              status: 'error',
+            },
+          })
+
+          return richError.message
+        }
       }
 
       writer.write({
@@ -142,29 +164,42 @@ export const runCommand = ({ writer }: Params) =>
         type: 'data-run-command',
         data: {
           sandboxId,
-          commandId: cmd.cmdId,
+          commandId: cmdId,
           command,
           args,
           status: 'waiting',
         },
       })
 
-      const done = await cmd.wait()
       try {
-        const [stdout, stderr] = await Promise.all([
-          done.stdout(),
-          done.stderr(),
-        ])
+        await initCommandArtifacts({ sandboxId, cmdId })
+        const sandbox = await connectE2BSandbox(sandboxId)
+        const cmd = sudo ? 'sudo' : command
+        const cmdArgs = sudo ? [command, ...args] : args
+
+        const { stdout, stderr, exitCode } = await e2bRunCommand({
+          sandbox,
+          command: cmd,
+          args: cmdArgs,
+        })
+
+        await finalizeCommandArtifacts({
+          sandboxId,
+          cmdId,
+          exitCode,
+          stdout,
+          stderr,
+        })
 
         writer.write({
           id: toolCallId,
           type: 'data-run-command',
           data: {
             sandboxId,
-            commandId: cmd.cmdId,
+            commandId: cmdId,
             command,
             args,
-            exitCode: done.exitCode,
+            exitCode,
             status: 'done',
           },
         })
@@ -172,7 +207,7 @@ export const runCommand = ({ writer }: Params) =>
         return (
           `The command \`${command} ${args.join(
             ' '
-          )}\` has finished with exit code ${done.exitCode}.` +
+          )}\` has finished with exit code ${exitCode}.` +
           `Stdout of the command was: \n` +
           `\`\`\`\n${stdout}\n\`\`\`\n` +
           `Stderr of the command was: \n` +
@@ -181,7 +216,7 @@ export const runCommand = ({ writer }: Params) =>
       } catch (error) {
         const richError = getRichError({
           action: 'wait for command to finish',
-          args: { sandboxId, commandId: cmd.cmdId },
+          args: { sandboxId, commandId: cmdId },
           error,
         })
 
@@ -190,7 +225,7 @@ export const runCommand = ({ writer }: Params) =>
           type: 'data-run-command',
           data: {
             sandboxId,
-            commandId: cmd.cmdId,
+            commandId: cmdId,
             command,
             args,
             error: richError.error,

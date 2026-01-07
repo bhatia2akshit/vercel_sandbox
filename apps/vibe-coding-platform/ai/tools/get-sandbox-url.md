@@ -1,6 +1,4 @@
-Use this tool to retrieve a publicly accessible URL for a specific port that was exposed during the creation of a Vercel Sandbox. This allows users (and the assistant) to preview web applications, access APIs, or interact with services running inside the sandbox via HTTP.
-
-⚠️ The requested port must have been explicitly declared when the sandbox was created. If the port was not exposed at sandbox creation time, this tool will NOT work for that port.
+Use this tool to retrieve a publicly accessible URL for a specific port in an E2B sandbox. This allows users (and the assistant) to preview web applications, access APIs, or interact with services running inside the sandbox via HTTP.
 
 ## When to Use This Tool
 
@@ -13,10 +11,8 @@ Use Get Sandbox URL when:
 
 ## Critical Requirements
 
-- The port must have been **explicitly exposed** in the `Create Sandbox` step
-  - Example: `ports: [3000]`
 - The command serving on that port must be actively running
-  - Use `Run Command` followed by `Wait Command` (if needed) to start the server
+  - Use `Run Command` (with `wait: false` for long-lived servers) to start the server
 
 ## Best Practices
 
@@ -29,7 +25,6 @@ Use Get Sandbox URL when:
 
 Avoid using this tool when:
 
-1. The port was **not declared** during sandbox creation — it will not be accessible
 2. No server is running on the specified port
 3. You haven't started the service yet or haven't waited for it to boot up
 4. You are referencing a transient script or CLI command (not a persistent server)
@@ -49,4 +44,4 @@ Assistant:
 
 ## Summary
 
-Use Get Sandbox URL to access live previews of services running inside the sandbox — but only for ports that were explicitly exposed during sandbox creation. If the port wasn’t declared, it will not be accessible externally.
+Use Get Sandbox URL to access live previews of services running inside the sandbox.

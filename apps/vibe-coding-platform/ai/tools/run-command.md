@@ -1,7 +1,7 @@
-Use this tool to run a command inside an existing Vercel Sandbox. You can choose whether the command should block until completion or run in the background by setting the `wait` parameter:
+Use this tool to run a command inside an existing E2B sandbox. You can choose whether the command should block until completion or run in the background by setting the `wait` parameter:
 
 - `wait: true` → Command runs and **must complete** before the response is returned.
-- `wait: false` → Command starts in the background, and the response returns immediately with its `commandId`.
+- `wait: false` → Command is queued to run in the background (via Trigger.dev), and the response returns immediately with its `commandId`.
 
 ⚠️ Commands are stateless — each one runs in a fresh shell session with **no memory** of previous commands. You CANNOT rely on `cd`, but other state like shell exports or background processes from prior commands should be available.
 
