@@ -1,9 +1,10 @@
 import type { UIMessageStreamWriter, UIMessage } from 'ai'
 import type { DataPart } from '../messages/data-parts'
+import { getRichError } from './get-rich-error'
 import { tool } from 'ai'
 import description from './get-sandbox-url.md'
 import z from 'zod/v3'
-import { connectE2BSandbox } from '../sandbox/e2b'
+import { connectE2BSandbox, e2bWaitForPort } from '../sandbox/e2b'
 
 interface Params {
   writer: UIMessageStreamWriter<UIMessage<never, DataPart>>
@@ -23,23 +24,75 @@ export const getSandboxURL = ({ writer }: Params) =>
         .describe(
           'The port number where a service is running inside the sandbox (e.g., 3000 for Next.js dev server, 8000 for Python apps, 5000 for Flask).'
         ),
+      waitForPort: z
+        .boolean()
+        .optional()
+        .describe(
+          'Whether to wait for the port to be listening before returning the URL. Defaults to true.'
+        ),
+      timeoutMs: z
+        .number()
+        .min(1000)
+        .max(120000)
+        .optional()
+        .describe(
+          'How long to wait for the port to open when waitForPort is enabled. Defaults to 30000ms.'
+        ),
     }),
-    execute: async ({ sandboxId, port }, { toolCallId }) => {
+    execute: async (
+      { sandboxId, port, waitForPort, timeoutMs },
+      { toolCallId }
+    ) => {
       writer.write({
         id: toolCallId,
         type: 'data-get-sandbox-url',
         data: { status: 'loading' },
       })
 
-      const sandbox = await connectE2BSandbox(sandboxId)
-      const url = sandbox.getHost(port)
+      try {
+        const sandbox = await connectE2BSandbox(sandboxId)
+        const shouldWait = waitForPort ?? true
+        if (shouldWait) {
+          const ready = await e2bWaitForPort({
+            sandbox,
+            port,
+            timeoutMs: timeoutMs ?? 30_000,
+          })
+          if (!ready) {
+            throw new Error(
+              `No service is listening on port ${port} in sandbox ${sandboxId} after ${
+                timeoutMs ?? 30_000
+              }ms`
+            )
+          }
+        }
 
-      writer.write({
-        id: toolCallId,
-        type: 'data-get-sandbox-url',
-        data: { url, status: 'done' },
-      })
+        const url = sandbox.getHost(port)
 
-      return { url }
+        writer.write({
+          id: toolCallId,
+          type: 'data-get-sandbox-url',
+          data: { url, status: 'done' },
+        })
+
+        return { url }
+      } catch (error) {
+        const richError = getRichError({
+          action: 'Get E2B Sandbox URL',
+          args: { sandboxId, port },
+          error,
+        })
+
+        writer.write({
+          id: toolCallId,
+          type: 'data-get-sandbox-url',
+          data: {
+            status: 'error',
+            error: { message: richError.error.message },
+          },
+        })
+
+        return richError.message
+      }
     },
   })

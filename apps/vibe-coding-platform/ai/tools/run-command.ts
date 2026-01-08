@@ -4,8 +4,11 @@ import { getRichError } from './get-rich-error'
 import { tool } from 'ai'
 import description from './run-command.md'
 import z from 'zod/v3'
-import { tasks } from '@trigger.dev/sdk/v3'
-import { connectE2BSandbox, e2bRunCommand } from '../sandbox/e2b'
+import {
+  connectE2BSandbox,
+  e2bRunCommand,
+  e2bStartCommand,
+} from '../sandbox/e2b'
 import {
   finalizeCommandArtifacts,
   initCommandArtifacts,
@@ -15,8 +18,6 @@ import { newCommandId } from '../sandbox/ids'
 interface Params {
   writer: UIMessageStreamWriter<UIMessage<never, DataPart>>
 }
-
-const TRIGGER_LOG_PREFIX = '[trigger]'
 
 export const runCommand = ({ writer }: Params) =>
   tool({
@@ -50,6 +51,10 @@ export const runCommand = ({ writer }: Params) =>
       { sandboxId, command, sudo, wait, args = [] },
       { toolCallId }
     ) => {
+      const normalized = normalizeCommand({ command, args })
+      command = normalized.command
+      args = normalized.args
+
       const cmdId = newCommandId()
 
       writer.write({
@@ -96,29 +101,17 @@ export const runCommand = ({ writer }: Params) =>
 
       if (!wait) {
         try {
-          console.log(`${TRIGGER_LOG_PREFIX} queueing background command`, {
-            sandboxId,
-            cmdId,
-            command,
-          })
-          const handle = await tasks.trigger('e2b-run-command', {
-            sandboxId,
-            cmdId,
-            command,
-            args,
-            sudo,
-          })
-          console.log(`${TRIGGER_LOG_PREFIX} background command queued`, {
-            sandboxId,
-            cmdId,
-            triggerRunId: handle.id,
-          })
+          const sandbox = await connectE2BSandbox(sandboxId)
+          const cmd = sudo ? 'sudo' : command
+          const cmdArgs = sudo ? [command, ...args] : args
 
-          await initCommandArtifacts({
-            sandboxId,
-            cmdId,
-            triggerRunId: handle.id,
+          await initCommandArtifacts({ sandboxId, cmdId })
+          const { pid } = await e2bStartCommand({
+            sandbox,
+            command: cmd,
+            args: cmdArgs,
           })
+          await initCommandArtifacts({ sandboxId, cmdId, pid })
 
           writer.write({
             id: toolCallId,
@@ -134,10 +127,10 @@ export const runCommand = ({ writer }: Params) =>
 
           return `The command \`${command} ${args.join(
             ' '
-          )}\` has been queued to run in the background in sandbox \`${sandboxId}\` with commandId \`${cmdId}\`.`
+          )}\` has been started in the background in sandbox \`${sandboxId}\` with commandId \`${cmdId}\` (pid \`${pid}\`).`
         } catch (error) {
           const richError = getRichError({
-            action: 'trigger background command',
+            action: 'start background command',
             args: { sandboxId, cmdId },
             error,
           })
@@ -237,3 +230,11 @@ export const runCommand = ({ writer }: Params) =>
       }
     },
   })
+
+function normalizeCommand(params: { command: string; args: string[] }) {
+  const cmd = params.command.trim()
+  if (cmd === 'pnpm') {
+    return { command: 'corepack', args: ['pnpm', ...params.args] }
+  }
+  return params
+}

@@ -1,7 +1,7 @@
 Use this tool to run a command inside an existing E2B sandbox. You can choose whether the command should block until completion or run in the background by setting the `wait` parameter:
 
 - `wait: true` → Command runs and **must complete** before the response is returned.
-- `wait: false` → Command is queued to run in the background (via Trigger.dev), and the response returns immediately with its `commandId`.
+- `wait: false` → Command is started in the background inside the sandbox (E2B background process), and the response returns immediately with its `commandId`.
 
 ⚠️ Commands are stateless — each one runs in a fresh shell session with **no memory** of previous commands. You CANNOT rely on `cd`, but other state like shell exports or background processes from prior commands should be available.
 
@@ -42,6 +42,7 @@ Use Run Command when:
 
 - The command is intended to stay running indefinitely (e.g., a dev server)
 - The command has no impact on subsequent operations (e.g., printing logs)
+  - Note: background commands may not stream stdout/stderr back to the UI; rely on service health checks (e.g., port readiness) instead.
 
 ## Other Rules
 
@@ -56,6 +57,10 @@ Assistant:
 1. Run Command: `{ command: "pnpm", args: ["install"], wait: true }`  
 2. Run Command: `{ command: "pnpm", args: ["run", "dev"], wait: false }`  
 </example>
+
+## Notes on `pnpm`
+
+- `pnpm` is executed as `corepack pnpm` inside the sandbox, so pnpm does not need to be globally installed first.
 
 <example>
 User: Build the app with Vite  
