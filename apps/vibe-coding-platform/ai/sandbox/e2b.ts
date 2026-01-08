@@ -1,10 +1,25 @@
-import { NotFoundError, Sandbox } from 'e2b'
+import { CommandHandle, NotFoundError, Sandbox } from 'e2b'
 
 type E2BSandbox = Sandbox
 const E2B_LOG_PREFIX = '[e2b]'
 
+function normalizeE2BTemplate(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return 'base'
+
+  // Some docs refer to E2B environments using docker-style names like
+  // `e2b/code-interpreter[:tag]`, but the SDK expects the environment/template id.
+  if (trimmed.startsWith('e2b/')) {
+    const withoutPrefix = trimmed.slice('e2b/'.length)
+    const withoutTag = withoutPrefix.split(':')[0] ?? ''
+    if (withoutTag) return withoutTag
+  }
+
+  return trimmed
+}
+
 function getE2BTemplate() {
-  return process.env.E2B_TEMPLATE || 'base'
+  return normalizeE2BTemplate(process.env.E2B_TEMPLATE || 'base')
 }
 
 function getE2BApiKey() {
@@ -24,6 +39,7 @@ export async function createE2BSandbox(params: {
   const sandbox = await Sandbox.create(template, {
     apiKey,
     timeoutMs: params.timeoutMs,
+    secure: false,
   })
   console.log(`${E2B_LOG_PREFIX} sandbox created`, {
     sandboxId: sandbox.sandboxId,
@@ -63,6 +79,55 @@ export async function e2bRunCommand(params: {
     stderr: result.stderr,
     exitCode: result.exitCode,
   }
+}
+
+export async function e2bStartCommand(params: {
+  sandbox: E2BSandbox
+  command: string
+  args: string[]
+}): Promise<{ pid: number }> {
+  const { sandbox, command, args } = params
+  const cmd = [command, ...args.map(shellEscape)].join(' ')
+  console.log(`${E2B_LOG_PREFIX} starting background command`, {
+    sandboxId: sandbox.sandboxId,
+    command,
+  })
+  const handle = (await sandbox.commands.run(cmd, {
+    background: true,
+  })) as CommandHandle
+  console.log(`${E2B_LOG_PREFIX} background command started`, {
+    sandboxId: sandbox.sandboxId,
+    command,
+    pid: handle.pid,
+  })
+  await handle.disconnect()
+  return { pid: handle.pid }
+}
+
+export async function e2bWaitForPort(params: {
+  sandbox: E2BSandbox
+  port: number
+  timeoutMs?: number
+  intervalMs?: number
+}): Promise<boolean> {
+  const { sandbox, port } = params
+  const timeoutMs = params.timeoutMs ?? 30_000
+  const intervalMs = params.intervalMs ?? 250
+
+  const tries = Math.max(1, Math.ceil(timeoutMs / intervalMs))
+  const sleepSeconds = Math.max(0.05, intervalMs / 1000)
+
+  const script = [
+    `set -euo pipefail`,
+    `for _ in $(seq 1 ${tries}); do`,
+    `  if ss -tuln | grep -qE '[:.]${port}\\\\b'; then exit 0; fi`,
+    `  sleep ${sleepSeconds}`,
+    `done`,
+    `exit 1`,
+  ].join('\n')
+
+  const result = await sandbox.commands.run(`bash -lc ${shellEscape(script)}`)
+  return result.exitCode === 0
 }
 
 export async function e2bWriteFile(params: {

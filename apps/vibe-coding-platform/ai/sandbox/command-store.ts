@@ -4,6 +4,7 @@ export interface CommandMeta {
   sandboxId: string
   cmdId: string
   startedAt: number
+  pid?: number
   exitCode?: number
   triggerRunId?: string
 }
@@ -26,6 +27,7 @@ export async function initCommandArtifacts(params: {
   sandboxId: string
   cmdId: string
   triggerRunId?: string
+  pid?: number
 }) {
   const sandbox = await connectE2BSandbox(params.sandboxId)
   await e2bMkdirp({ sandbox, dir: cmdDir(params.cmdId) })
@@ -47,8 +49,12 @@ export async function initCommandArtifacts(params: {
     meta.triggerRunId = params.triggerRunId
   }
 
+  if (typeof params.pid === 'number' && meta.pid !== params.pid) {
+    meta.pid = params.pid
+  }
+
   const writes: Array<Promise<void>> = []
-  if (!existing || params.triggerRunId) {
+  if (!existing || params.triggerRunId || typeof params.pid === 'number') {
     writes.push(
       e2bWriteFile({
         sandbox,

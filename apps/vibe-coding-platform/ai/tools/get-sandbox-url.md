@@ -13,10 +13,12 @@ Use Get Sandbox URL when:
 
 - The command serving on that port must be actively running
   - Use `Run Command` (with `wait: false` for long-lived servers) to start the server
+  - By default, this tool waits briefly for the port to start listening before returning a URL.
 
 ## Best Practices
 
 - Only call this tool after the server process has successfully started
+- If the server takes time to boot, increase the tool timeout (or pass a larger `timeoutMs`) instead of returning a URL immediately
 - Use typical ports based on framework defaults (e.g., 3000 for Next.js, 5173 for Vite, 8080 for Node APIs)
 - If multiple services run on different ports, ensure each port was exposed up front during sandbox creation
 - Don’t attempt to expose or discover ports dynamically after creation — only predefined ports are valid
